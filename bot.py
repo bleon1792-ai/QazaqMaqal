@@ -32,10 +32,10 @@ logging.basicConfig(
 )
 
 TELEGRAM_BOT_TOKEN = "8884376648:AAE8azDpH27Y2VoGuNkdRg-gwZrRTRZul6I"
-GEMINI_API_KEY = "AQ.Ab8RN6IDzc0biq-8J_eK-P0ePYE8I5ER01Vm7cAddg_BTZdWrA"
+GEMINI_API_KEY = "AQ.Ab8RN6K9uLXg_RBanknamovbuDx082Q7w_Tsqc51sr4haWF3fg"
 
-GEMINI_MODEL = "gemini-3.6-flash"
-GEMINI_URL = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent?key={GEMINI_API_KEY}"
+GEMINI_MODEL = "gemini-1.5-flash"
+GEMINI_URL = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent"
 
 MENU_KEYBOARD = ReplyKeyboardMarkup(
     [
@@ -66,9 +66,13 @@ async def ask_gemini(prompt: str) -> str:
             }
         ]
     }
+    headers = {
+        "Authorization": f"Bearer {GEMINI_API_KEY}",
+        "Content-Type": "application/json"
+    }
     try:
         async with httpx.AsyncClient(timeout=30.0) as client:
-            response = await client.post(GEMINI_URL, json=payload)
+            response = await client.post(GEMINI_URL, json=payload, headers=headers)
             if response.status_code == 200:
                 data = response.json()
                 return data['candidates'][0]['content']['parts'][0]['text']
