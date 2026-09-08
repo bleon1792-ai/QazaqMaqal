@@ -13,7 +13,6 @@ from telegram.ext import (
     filters
 )
 
-# Веб-сервер для поддержки активности на Render
 class HealthCheckHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
@@ -33,12 +32,11 @@ logging.basicConfig(
 )
 
 TELEGRAM_BOT_TOKEN = "8884376648:AAE8azDpH27Y2VoGuNkdRg-gwZrRTRZul6I"
-GEMINI_API_KEY = "AIzaSyD1WRYTvMmAWwthGB97Nc9nhCaIEwWf-2k"
+GEMINI_API_KEY = "AQ.Ab8RN6IDzc0biq-8J_eK-P0ePYE8I5ER01Vm7cAddg_BTZdWrA"
 
 GEMINI_MODEL = "gemini-3.6-flash"
 GEMINI_URL = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent?key={GEMINI_API_KEY}"
 
-# Расширенное меню с кнопками управления избранным
 MENU_KEYBOARD = ReplyKeyboardMarkup(
     [
         [KeyboardButton("📚 Учить пословицы"), KeyboardButton("🎯 Проверь себя")],
@@ -57,7 +55,6 @@ POPULAR_PROVERBS = [
     "Өнер алды — қызыл тіл."
 ]
 
-# Хранилище избранного и последних ответов пользователей в памяти
 user_favorites = {}
 last_bot_message = {}
 
@@ -118,7 +115,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 user_favorites[chat_id].append(last_msg)
                 await update.message.reply_text("✅ Успешно сохранено в **Избранное**! ❤️", reply_markup=MENU_KEYBOARD, parse_mode="Markdown")
             else:
-                await update.message.reply_text("📌 Этот ответ уже есть в твоем избранном!", reply_markup=MENU_Keyboards if 'MENU_Keyboards' in globals() else MENU_KEYBOARD)
+                await update.message.reply_text("📌 Этот ответ уже есть в твоем избранном!", reply_markup=MENU_KEYBOARD)
         return
 
     elif text == "🗑 Очистить избранное":
@@ -172,7 +169,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         reply = await ask_gemini(prompt)
 
-    # Запоминаем последний ответ бота для возможности сохранения
     last_bot_message[chat_id] = reply
     await update.message.reply_text(reply, reply_markup=MENU_KEYBOARD)
 
