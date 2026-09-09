@@ -1,9 +1,9 @@
 import logging
-import random
 import os
-import httpx
+import random
 import threading
 from http.server import HTTPServer, BaseHTTPRequestHandler
+import httpx
 from telegram import Update, ReplyKeyboardMarkup, KeyboardButton
 from telegram.ext import (
     ApplicationBuilder,
@@ -13,6 +13,7 @@ from telegram.ext import (
     filters
 )
 
+# 1. Запуск мини веб-сервера для Render (Health Check)
 class HealthCheckHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
@@ -26,17 +27,18 @@ def run_web_server():
 
 threading.Thread(target=run_web_server, daemon=True).start()
 
+# 2. Логирование
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     level=logging.INFO
 )
 
-TELEGRAM_BOT_TOKEN = "8884376648:AAE8azDpH27Y2VoGuNkdRg-gwZrRTRZul6I"
-GEMINI_API_KEY = "AQ.Ab8RN6L4Z2J2WYAe1XVkkJ5rQzeKPyG1yi3c-aWfVxF8aTztAg"
+# 3. Безопасное получение токенов из настроек Render
+TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 
-# Точное название модели, требуемое API
-GEMINI_MODEL = "gemini-3.6-flash"
-GEMINI_URL = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent?key={GEMINI_API_KEY}"
+# Список моделей для автоматического фолбэка при 404
+MODELS_TO_TRY = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash"]
 
 MENU_KEYBOARD = ReplyKeyboardMarkup(
     [
@@ -60,6 +62,9 @@ user_favorites = {}
 last_bot_message = {}
 
 async def ask_gemini(prompt: str) -> str:
+    if not GEMINI_API_KEY:
+        return "❌ Ошибка: В настройках Render не задана переменная GEMINI_API_KEY!"
+
     payload = {
         "contents": [
             {
@@ -67,19 +72,28 @@ async def ask_gemini(prompt: str) -> str:
             }
         ]
     }
+    
+    # Использование официального заголовка x-goog-api-key предотвращает 401
     headers = {
-        "Content-Type": "application/json"
+        "Content-Type": "application/json",
+        "x-goog-api-key": GEMINI_API_KEY
     }
-    try:
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            response = await client.post(GEMINI_URL, json=payload, headers=headers)
-            if response.status_code == 200:
-                data = response.json()
-                return data['candidates'][0]['content']['parts'][0]['text']
-            else:
-                return f"❌ Ошибка ИИ ({response.status_code}): {response.text}"
-    except Exception as e:
-        return f"❌ Ошибка подключения к ИИ: {e}"
+
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        last_error = ""
+        for model in MODELS_TO_TRY:
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
+            try:
+                response = await client.post(url, json=payload, headers=headers)
+                if response.status_code == 200:
+                    data = response.json()
+                    return data['candidates'][0]['content']['parts'][0]['text']
+                else:
+                    last_error = f"Ошибка ({response.status_code}): {response.text}"
+            except Exception as e:
+                last_error = f"Ошибка подключения: {e}"
+        
+        return f"❌ Не удалось получить ответ от ИИ: {last_error}"
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     welcome_text = (
@@ -135,52 +149,4 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "Для каждой приведи точный перевод на русский язык и краткое объяснение морали в 1 предложении. "
             "Оформи красиво с эмодзи."
         )
-        reply = await ask_gemini(prompt)
-
-    elif text == "🎯 Проверь себя":
-        prompt = (
-            "Сгенерируй тестовый вопрос по казахским пословицам. "
-            "Например: 'Заверши пословицу: Отан — ...' или 'Что означает пословица...'. "
-            "Дай 3 варианта ответа (A, B, C) и в самом конце под спойлером напиши правильный ответ."
-        )
-        reply = await ask_gemini(prompt)
-
-    elif text == "🎲 Случайная пословица":
-        proverb = random.choice(POPULAR_PROVERBS)
-        prompt = f"Возьми пословицу '{proverb}' и подробно объясни её смысл, перевод и в каких жизненных ситуациях её применяют."
-        reply = await ask_gemini(prompt)
-
-    elif text == "🔍 Найти по теме":
-        reply = (
-            "💡 Напиши тему, которая тебя интересует (например: *дружба*, *труд*, *родина*, *знания*, *семья*), "
-            "и я подберу подходящие пословицы!"
-        )
-
-    elif text == "🏆 Мой результат":
-        fav_count = len(user_favorites.get(chat_id, []))
-        reply = f"📊 Твой уровень: **Мудрец-начинающий** ⭐️\nСохранено в избранное: {fav_count} пословиц(ы)"
-
-    else:
-        prompt = (
-            f"Ты эксперт по казахскому языку и мақал-мәтелдер. "
-            f"Пользователь прислал текст или пословицу: '{text}'.\n\n"
-            f"Сделай подробный разбор:\n"
-            f"1. 🇰🇿 Пословица и точный перевод на русский\n"
-            f"2. 💡 Глубокое значение и смысл простыми словами\n"
-            f"3. 🎯 В каких ситуациях применяется\n"
-            f"4. 📌 Мораль (чему учит)\n\n"
-            f"Отвечай красиво, вежливо и с эмодзи."
-        )
-        reply = await ask_gemini(prompt)
-
-    last_bot_message[chat_id] = reply
-    await update.message.reply_text(reply, reply_markup=MENU_KEYBOARD)
-
-if __name__ == "__main__":
-    app = ApplicationBuilder().token(TELEGRAM_BOT_TOKEN).build()
-
-    app.add_handler(CommandHandler("start", start))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
-
-    print("🤖 Бот QazaqMaqal на Gemini 3.6 Flash успешно запущен!")
-    app.run_polling()
+        reply = await ask_gemini(prompt
