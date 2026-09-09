@@ -32,10 +32,11 @@ logging.basicConfig(
 )
 
 TELEGRAM_BOT_TOKEN = "8884376648:AAE8azDpH27Y2VoGuNkdRg-gwZrRTRZul6I"
-GEMINI_API_KEY = "AQ.Ab8RN6K9uLXg_RBanknamovbuDx082Q7w_Tsqc51sr4haWF3fg"
+GEMINI_API_KEY = "AQ.Ab8RN6Jv66r3CTgNqjllZ4jI__MPS_zrjjAVn4bIpF0BIxaDdg"
 
 GEMINI_MODEL = "gemini-1.5-flash"
-GEMINI_URL = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent"
+# Передаем ключ прямо в URL параметров
+GEMINI_URL = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent?key={GEMINI_API_KEY}"
 
 MENU_KEYBOARD = ReplyKeyboardMarkup(
     [
@@ -66,8 +67,8 @@ async def ask_gemini(prompt: str) -> str:
             }
         ]
     }
+    # Убираем Authorization Bearer, так как ключ передается через URL параметр ?key=
     headers = {
-        "Authorization": f"Bearer {GEMINI_API_KEY}",
         "Content-Type": "application/json"
     }
     try:
