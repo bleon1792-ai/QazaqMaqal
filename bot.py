@@ -38,12 +38,11 @@ logging.basicConfig(
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 
-# Актуальный список моделей Google Gemini
+# Модели 3.5 серии
 MODELS_TO_TRY = [
-    "gemini-2.5-flash",
-    "gemini-2.0-flash",
-    "gemini-1.5-flash-latest",
-    "gemini-2.5-flash-lite"
+    "gemini-3.5-flash",
+    "gemini-3.5-flash-lite",
+    "gemini-3.0-flash"
 ]
 
 MENU_KEYBOARD = ReplyKeyboardMarkup(
@@ -81,7 +80,6 @@ async def ask_gemini(prompt: str) -> str:
 
     async with httpx.AsyncClient(timeout=30.0) as client:
         last_error = ""
-        # Пробуем актуальные модели по очереди
         for model in MODELS_TO_TRY:
             for api_ver in ["v1beta", "v1"]:
                 url = f"https://generativelanguage.googleapis.com/{api_ver}/models/{model}:generateContent"
