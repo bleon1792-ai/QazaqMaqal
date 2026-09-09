@@ -1,4 +1,5 @@
 import os
+import sys
 import logging
 import random
 import threading
@@ -33,11 +34,10 @@ logging.basicConfig(
     level=logging.INFO
 )
 
-# 3. Безопасное чтение ключей из переменных Render
+# 3. Безопасное чтение ключей
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 
-# Модели Gemini
 MODELS_TO_TRY = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash"]
 
 MENU_KEYBOARD = ReplyKeyboardMarkup(
@@ -66,13 +66,8 @@ async def ask_gemini(prompt: str) -> str:
         return "❌ Ошибка: В настройках Render не задана переменная GEMINI_API_KEY!"
 
     payload = {
-        "contents": [
-            {
-                "parts": [{"text": prompt}]
-            }
-        ]
+        "contents": [{"parts": [{"text": prompt}]}]
     }
-    
     headers = {
         "Content-Type": "application/json",
         "x-goog-api-key": GEMINI_API_KEY
@@ -108,10 +103,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if text == "❤️ Избранное":
         favs = user_favorites.get(chat_id, [])
         if not favs:
-            await update.message.reply_text(
-                "📭 Твой список избранного пока пуст.",
-                reply_markup=MENU_KEYBOARD
-            )
+            await update.message.reply_text("📭 Твой список избранного пока пуст.", reply_markup=MENU_KEYBOARD)
         else:
             await update.message.reply_text(f"❤️ Твои сохранённые материалы ({len(favs)}):", reply_markup=MENU_KEYBOARD)
             for i, fav in enumerate(favs, 1):
@@ -150,4 +142,39 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif text == "🎲 Случайная пословица":
         proverb = random.choice(POPULAR_PROVERBS)
         prompt = f"Возьми пословицу '{proverb}' и подробно объясни её смысл и перевод."
-        reply = await ask_gemini
+        reply = await ask_gemini(prompt)
+
+    elif text == "🔍 Найти по теме":
+        reply = "💡 Напиши тему (например: дружба, труд, родина), и я подберу пословицы!"
+
+    elif text == "🏆 Мой результат":
+        fav_count = len(user_favorites.get(chat_id, []))
+        reply = f"📊 Твой уровень: Мудрец-начинающий ⭐️\nСохранено в избранное: {fav_count} пословиц(ы)"
+
+    else:
+        prompt = f"Ты эксперт по казахским пословицам (мақал-мәтелдер). Разбери пословицу или текст: '{text}'. Дай перевод, смысл и где применяется."
+        reply = await ask_gemini(prompt)
+
+    last_bot_message[chat_id] = reply
+    await update.message.reply_text(reply, reply_markup=MENU_KEYBOARD)
+
+if __name__ == "__main__":
+    print("--- ПРОВЕРКА ПЕРЕМЕННЫХ ---")
+    print(f"TELEGRAM_BOT_TOKEN найден: {bool(TELEGRAM_BOT_TOKEN)}")
+    print(f"GEMINI_API_KEY найден: {bool(GEMINI_API_KEY)}")
+    print("---------------------------")
+
+    if not TELEGRAM_BOT_TOKEN:
+        print("❌ ОШИБКА: TELEGRAM_BOT_TOKEN не найден в Environment Variables!")
+        sys.exit(1)
+
+    try:
+        app = ApplicationBuilder().token(TELEGRAM_BOT_TOKEN).build()
+        app.add_handler(CommandHandler("start", start))
+        app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+
+        print("🚀 Бот QazaqMaqal успешно запущен и готов к работе!")
+        app.run_polling()
+    except Exception as e:
+        print(f"❌ КРИТИЧЕСКАЯ ОШИБКА ПРИ ЗАПУСКЕ БОТА: {e}")
+        sys.exit(1)
