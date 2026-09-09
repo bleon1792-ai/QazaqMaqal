@@ -1,5 +1,5 @@
-import logging
 import os
+import logging
 import random
 import threading
 from http.server import HTTPServer, BaseHTTPRequestHandler
@@ -13,12 +13,12 @@ from telegram.ext import (
     filters
 )
 
-# 1. Запуск мини веб-сервера для Render (Health Check)
+# 1. Веб-сервер для Health Check на Render
 class HealthCheckHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
         self.end_headers()
-        self.wfile.write(b"QazaqMaqal Bot is running!")
+        self.wfile.write(b"Bot is running!")
 
 def run_web_server():
     port = int(os.environ.get("PORT", 10000))
@@ -33,11 +33,11 @@ logging.basicConfig(
     level=logging.INFO
 )
 
-# 3. Безопасное получение токенов из настроек Render
+# 3. Безопасное чтение ключей из переменных окружения
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 
-# Список моделей для автоматического фолбэка при 404
+# Модели Gemini
 MODELS_TO_TRY = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash"]
 
 MENU_KEYBOARD = ReplyKeyboardMarkup(
@@ -73,7 +73,6 @@ async def ask_gemini(prompt: str) -> str:
         ]
     }
     
-    # Использование официального заголовка x-goog-api-key предотвращает 401
     headers = {
         "Content-Type": "application/json",
         "x-goog-api-key": GEMINI_API_KEY
@@ -89,9 +88,9 @@ async def ask_gemini(prompt: str) -> str:
                     data = response.json()
                     return data['candidates'][0]['content']['parts'][0]['text']
                 else:
-                    last_error = f"Ошибка ({response.status_code}): {response.text}"
+                    last_error = f"HTTP {response.status_code}: {response.text}"
             except Exception as e:
-                last_error = f"Ошибка подключения: {e}"
+                last_error = str(e)
         
         return f"❌ Не удалось получить ответ от ИИ: {last_error}"
 
@@ -149,4 +148,34 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "Для каждой приведи точный перевод на русский язык и краткое объяснение морали в 1 предложении. "
             "Оформи красиво с эмодзи."
         )
-        reply = await ask_gemini(prompt
+        reply = await ask_gemini(prompt)
+
+    elif text == "🎯 Проверь себя":
+        prompt = (
+            "Сгенерируй тестовый вопрос по казахским пословицам. "
+            "Например: 'Заверши пословицу: Отан — ...' или 'Что означает пословица...'. "
+            "Дай 3 варианта ответа (A, B, C) и в самом конце под спойлером напиши правильный ответ."
+        )
+        reply = await ask_gemini(prompt)
+
+    elif text == "🎲 Случайная пословица":
+        proverb = random.choice(POPULAR_PROVERBS)
+        prompt = f"Возьми пословицу '{proverb}' и подробно объясни её смысл, перевод и в каких жизненных ситуациях её применяют."
+        reply = await ask_gemini(prompt)
+
+    elif text == "🔍 Найти по теме":
+        reply = (
+            "💡 Напиши тему, которая тебя интересует (например: *дружба*, *труд*, *родина*, *знания*, *семья*), "
+            "и я подберу подходящие пословицы!"
+        )
+
+    elif text == "🏆 Мой результат":
+        fav_count = len(user_favorites.get(chat_id, []))
+        reply = f"📊 Твой уровень: **Мудрец-начинающий** ⭐️\nСохранено в избранное: {fav_count} пословиц(ы)"
+
+    else:
+        prompt = (
+            f"Ты эксперт по казахскому языку и мақал-мәтелдер. "
+            f"Пользователь прислал текст или пословицу: '{text}'.\n\n"
+            f"Сделай подробный разбор:\n"
+            f"1. 🇰🇿 Пословица и точный перевод на русский\n"
