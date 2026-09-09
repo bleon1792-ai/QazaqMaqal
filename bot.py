@@ -34,8 +34,10 @@ logging.basicConfig(
 TELEGRAM_BOT_TOKEN = "8884376648:AAE8azDpH27Y2VoGuNkdRg-gwZrRTRZul6I"
 GEMINI_API_KEY = "AQ.Ab8RN6Jv66r3CTgNqjllZ4jI__MPS_zrjjAVn4bIpF0BIxaDdg"
 
-GEMINI_MODEL = "gemini-2.5-flash"
-GEMINI_URL = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent?key={GEMINI_API_KEY}"
+# Ошибка 401 возникает из-за того, что ключ формата AQ... (OAuth/Bearer-токен Google Cloud) 
+# не передается через заголовок авторизации. Исправляем на Bearer вместо параметра в URL.
+GEMINI_MODEL = "gemini-3.6-flash"
+GEMINI_URL = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent"
 
 MENU_KEYBOARD = ReplyKeyboardMarkup(
     [
@@ -67,7 +69,8 @@ async def ask_gemini(prompt: str) -> str:
         ]
     }
     headers = {
-        "Content-Type": "application/json"
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {GEMINI_API_KEY}"
     }
     try:
         async with httpx.AsyncClient(timeout=30.0) as client:
@@ -82,7 +85,7 @@ async def ask_gemini(prompt: str) -> str:
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     welcome_text = (
-        "Сәлем! 👋 Добро пожаловать в **Qazaq Maqal** 🇰🇿!\n\n"
+        "Сәлем! 👋 Добро пожаловать в **Qazaq Maqal** 🇰🇿 (на базе Gemini 3.6 Flash)!\n\n"
         "Выбирай пункт из меню ниже, отправляй пословицы для разбора, "
         "а понравившиеся ответы сохраняй в **Избранное** кнопкой «💾 Сохранить текущее»!"
     )
@@ -181,5 +184,5 @@ if __name__ == "__main__":
     app.add_handler(CommandHandler("start", start))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
-    print("🤖 Бот QazaqMaqal успешно запущен!")
+    print("🤖 Бот QazaqMaqal на Gemini 3.6 Flash успешно запущен!")
     app.run_polling()
