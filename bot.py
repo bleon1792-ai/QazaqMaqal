@@ -32,11 +32,12 @@ logging.basicConfig(
 )
 
 TELEGRAM_BOT_TOKEN = "8884376648:AAE8azDpH27Y2VoGuNkdRg-gwZrRTRZul6I"
-GEMINI_API_KEY = "AQ.Ab8RN6Jv66r3CTgNqjllZ4jI__MPS_zrjjAVn4bIpF0BIxaDdg"
+GEMINI_API_KEY = "AQ.Ab8RN6L4Z2J2WYAe1XVkkJ5rQzeKPyG1yi3c-aWfVxF8aTztAg"
 
-GEMINI_MODEL = "gemini-3.6-flash"
-# Убираем ?key= из URL, так как передаем ключ через специальный заголовок x-goog-api-key
-GEMINI_URL = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent"
+# Используем официальное имя модели для v1beta
+GEMINI_MODEL = "gemini-2.0-flash"
+# Ключ передается через URL параметр ?key= без заголовка Authorization
+GEMINI_URL = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent?key={GEMINI_API_KEY}"
 
 MENU_KEYBOARD = ReplyKeyboardMarkup(
     [
@@ -67,10 +68,9 @@ async def ask_gemini(prompt: str) -> str:
             }
         ]
     }
-    # Передаем ключ в правильном заголовке x-goog-api-key для AQ-ключей Google Cloud
+    # Убран Authorization Bearer, вызывавший ошибку 401
     headers = {
-        "Content-Type": "application/json",
-        "x-goog-api-key": GEMINI_API_KEY
+        "Content-Type": "application/json"
     }
     try:
         async with httpx.AsyncClient(timeout=30.0) as client:
