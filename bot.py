@@ -28,17 +28,23 @@ def run_web_server():
 
 threading.Thread(target=run_web_server, daemon=True).start()
 
-# 2. Логирование
+# 2. Настройка логирования
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     level=logging.INFO
 )
 
-# 3. Безопасное чтение ключей
+# 3. Переменные окружения
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 
-MODELS_TO_TRY = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash"]
+# Актуальный список моделей Google Gemini
+MODELS_TO_TRY = [
+    "gemini-2.5-flash",
+    "gemini-2.0-flash",
+    "gemini-1.5-flash-latest",
+    "gemini-2.5-flash-lite"
+]
 
 MENU_KEYBOARD = ReplyKeyboardMarkup(
     [
@@ -75,19 +81,21 @@ async def ask_gemini(prompt: str) -> str:
 
     async with httpx.AsyncClient(timeout=30.0) as client:
         last_error = ""
+        # Пробуем актуальные модели по очереди
         for model in MODELS_TO_TRY:
-            url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
-            try:
-                response = await client.post(url, json=payload, headers=headers)
-                if response.status_code == 200:
-                    data = response.json()
-                    return data['candidates'][0]['content']['parts'][0]['text']
-                else:
-                    last_error = f"HTTP {response.status_code}: {response.text}"
-            except Exception as e:
-                last_error = str(e)
+            for api_ver in ["v1beta", "v1"]:
+                url = f"https://generativelanguage.googleapis.com/{api_ver}/models/{model}:generateContent"
+                try:
+                    response = await client.post(url, json=payload, headers=headers)
+                    if response.status_code == 200:
+                        data = response.json()
+                        return data['candidates'][0]['content']['parts'][0]['text']
+                    else:
+                        last_error = f"Model {model} ({api_ver}) HTTP {response.status_code}: {response.text}"
+                except Exception as e:
+                    last_error = str(e)
         
-        return f"❌ Не удалось получить ответ от ИИ: {last_error}"
+        return f"❌ Ошибка запроса к ИИ: {last_error}"
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     welcome_text = (
@@ -159,22 +167,14 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(reply, reply_markup=MENU_KEYBOARD)
 
 if __name__ == "__main__":
-    print("--- ПРОВЕРКА ПЕРЕМЕННЫХ ---")
-    print(f"TELEGRAM_BOT_TOKEN найден: {bool(TELEGRAM_BOT_TOKEN)}")
-    print(f"GEMINI_API_KEY найден: {bool(GEMINI_API_KEY)}")
-    print("---------------------------")
-
     if not TELEGRAM_BOT_TOKEN:
-        print("❌ ОШИБКА: TELEGRAM_BOT_TOKEN не найден в Environment Variables!")
+        print("❌ ОШИБКА: TELEGRAM_BOT_TOKEN не задан!")
         sys.exit(1)
 
-    try:
-        app = ApplicationBuilder().token(TELEGRAM_BOT_TOKEN).build()
-        app.add_handler(CommandHandler("start", start))
-        app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+    app = ApplicationBuilder().token(TELEGRAM_BOT_TOKEN).build()
 
-        print("🚀 Бот QazaqMaqal успешно запущен и готов к работе!")
-        app.run_polling()
-    except Exception as e:
-        print(f"❌ КРИТИЧЕСКАЯ ОШИБКА ПРИ ЗАПУСКЕ БОТА: {e}")
-        sys.exit(1)
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+
+    print("🚀 Бот QazaqMaqal успешно запущен!")
+    app.run_polling()
