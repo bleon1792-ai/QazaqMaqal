@@ -34,9 +34,8 @@ logging.basicConfig(
 TELEGRAM_BOT_TOKEN = "8884376648:AAE8azDpH27Y2VoGuNkdRg-gwZrRTRZul6I"
 GEMINI_API_KEY = "AQ.Ab8RN6L4Z2J2WYAe1XVkkJ5rQzeKPyG1yi3c-aWfVxF8aTztAg"
 
-# Используем официальное имя модели для v1beta
-GEMINI_MODEL = "gemini-2.0-flash"
-# Ключ передается через URL параметр ?key= без заголовка Authorization
+# Точное название модели, требуемое API
+GEMINI_MODEL = "gemini-3.6-flash"
 GEMINI_URL = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent?key={GEMINI_API_KEY}"
 
 MENU_KEYBOARD = ReplyKeyboardMarkup(
@@ -68,7 +67,6 @@ async def ask_gemini(prompt: str) -> str:
             }
         ]
     }
-    # Убран Authorization Bearer, вызывавший ошибку 401
     headers = {
         "Content-Type": "application/json"
     }
@@ -184,5 +182,5 @@ if __name__ == "__main__":
     app.add_handler(CommandHandler("start", start))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
-    print("🤖 Бот QazaqMaqal успешно запущен!")
+    print("🤖 Бот QazaqMaqal на Gemini 3.6 Flash успешно запущен!")
     app.run_polling()
