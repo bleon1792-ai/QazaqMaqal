@@ -33,7 +33,7 @@ logging.basicConfig(
     level=logging.INFO
 )
 
-# 3. Безопасное чтение ключей из переменных окружения
+# 3. Безопасное чтение ключей из переменных Render
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 
@@ -96,11 +96,10 @@ async def ask_gemini(prompt: str) -> str:
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     welcome_text = (
-        "Сәлем! 👋 Добро пожаловать в **QazaqMaqal** 🇰🇿!\n\n"
-        "Выбирай пункт из меню ниже, отправляй пословицы для разбора, "
-        "а понравившиеся ответы сохраняй в **Избранное** кнопкой «💾 Сохранить текущее»!"
+        "Сәлем! 👋 Добро пожаловать в QazaqMaqal 🇰🇿!\n\n"
+        "Выбирай пункт из меню ниже или отправляй пословицы для разбора!"
     )
-    await update.message.reply_text(welcome_text, reply_markup=MENU_KEYBOARD, parse_mode="Markdown")
+    await update.message.reply_text(welcome_text, reply_markup=MENU_KEYBOARD)
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text
@@ -110,72 +109,45 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         favs = user_favorites.get(chat_id, [])
         if not favs:
             await update.message.reply_text(
-                "📭 Твой список избранного пока пуст.\n\n"
-                "Получи ответ от бота и нажми **«💾 Сохранить текущее»**, чтобы добавить его!",
-                reply_markup=MENU_KEYBOARD,
-                parse_mode="Markdown"
+                "📭 Твой список избранного пока пуст.",
+                reply_markup=MENU_KEYBOARD
             )
         else:
-            await update.message.reply_text(f"❤️ **Твои сохранённые материалы ({len(favs)}):**", parse_mode="Markdown", reply_markup=MENU_KEYBOARD)
+            await update.message.reply_text(f"❤️ Твои сохранённые материалы ({len(favs)}):", reply_markup=MENU_KEYBOARD)
             for i, fav in enumerate(favs, 1):
-                await update.message.reply_text(f"📌 **Сохранение #{i}**\n\n{fav}", parse_mode="Markdown")
+                await update.message.reply_text(f"📌 Сохранение #{i}\n\n{fav}")
         return
 
     elif text == "💾 Сохранить текущее":
         last_msg = last_bot_message.get(chat_id)
         if not last_msg:
-            await update.message.reply_text("⚠️ Сначала отправь запрос боту, чтобы было что сохранять!", reply_markup=MENU_KEYBOARD)
+            await update.message.reply_text("⚠️ Сначала отправь запрос боту!", reply_markup=MENU_KEYBOARD)
         else:
             if chat_id not in user_favorites:
                 user_favorites[chat_id] = []
             if last_msg not in user_favorites[chat_id]:
                 user_favorites[chat_id].append(last_msg)
-                await update.message.reply_text("✅ Успешно сохранено в **Избранное**! ❤️", reply_markup=MENU_KEYBOARD, parse_mode="Markdown")
+                await update.message.reply_text("✅ Успешно сохранено в Избранное!", reply_markup=MENU_KEYBOARD)
             else:
-                await update.message.reply_text("📌 Этот ответ уже есть в твоем избранном!", reply_markup=MENU_KEYBOARD)
+                await update.message.reply_text("📌 Этот ответ уже есть в избранном!", reply_markup=MENU_KEYBOARD)
         return
 
     elif text == "🗑 Очистить избранное":
         user_favorites[chat_id] = []
-        await update.message.reply_text("🗑 Твой список избранного полностью очищен.", reply_markup=MENU_KEYBOARD)
+        await update.message.reply_text("🗑 Твой список избранного очищен.", reply_markup=MENU_KEYBOARD)
         return
 
     await context.bot.send_chat_action(chat_id=chat_id, action="typing")
 
     if text == "📚 Учить пословицы":
-        prompt = (
-            "Напиши 3 мудрые казахские пословицы. "
-            "Для каждой приведи точный перевод на русский язык и краткое объяснение морали в 1 предложении. "
-            "Оформи красиво с эмодзи."
-        )
+        prompt = "Напиши 3 мудрые казахские пословицы с переводом на русский язык и кратким объяснением морали."
         reply = await ask_gemini(prompt)
 
     elif text == "🎯 Проверь себя":
-        prompt = (
-            "Сгенерируй тестовый вопрос по казахским пословицам. "
-            "Например: 'Заверши пословицу: Отан — ...' или 'Что означает пословица...'. "
-            "Дай 3 варианта ответа (A, B, C) и в самом конце под спойлером напиши правильный ответ."
-        )
+        prompt = "Сгенерируй тестовый вопрос по казахским пословицам с 3 вариантами ответа (A, B, C) и правильным ответом в конце."
         reply = await ask_gemini(prompt)
 
     elif text == "🎲 Случайная пословица":
         proverb = random.choice(POPULAR_PROVERBS)
-        prompt = f"Возьми пословицу '{proverb}' и подробно объясни её смысл, перевод и в каких жизненных ситуациях её применяют."
-        reply = await ask_gemini(prompt)
-
-    elif text == "🔍 Найти по теме":
-        reply = (
-            "💡 Напиши тему, которая тебя интересует (например: *дружба*, *труд*, *родина*, *знания*, *семья*), "
-            "и я подберу подходящие пословицы!"
-        )
-
-    elif text == "🏆 Мой результат":
-        fav_count = len(user_favorites.get(chat_id, []))
-        reply = f"📊 Твой уровень: **Мудрец-начинающий** ⭐️\nСохранено в избранное: {fav_count} пословиц(ы)"
-
-    else:
-        prompt = (
-            f"Ты эксперт по казахскому языку и мақал-мәтелдер. "
-            f"Пользователь прислал текст или пословицу: '{text}'.\n\n"
-            f"Сделай подробный разбор:\n"
-            f"1. 🇰🇿 Пословица и точный перевод на русский\n"
+        prompt = f"Возьми пословицу '{proverb}' и подробно объясни её смысл и перевод."
+        reply = await ask_gemini
