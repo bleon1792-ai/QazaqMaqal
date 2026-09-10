@@ -39,9 +39,9 @@ TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 
 MODELS_TO_TRY = [
-    "gemini-3.5-flash",
-    "gemini-3.5-flash-lite",
-    "gemini-3.0-flash"
+    "gemini-2.5-flash",
+    "gemini-2.5-flash-lite",
+    "gemini-1.5-flash"
 ]
 
 MENU_KEYBOARD = ReplyKeyboardMarkup(
@@ -69,14 +69,13 @@ async def ask_gemini(prompt: str) -> str:
     if not GEMINI_API_KEY:
         return "❌ Ошибка: В настройках Render не задана переменная GEMINI_API_KEY!"
 
-    # Единый чёткий шаблон оформления ответа
     full_prompt = (
         "Инструкция: Всегда оформляй ответ строго по этой структуре:\n\n"
         "🇰🇿 **Мақал:** (пословица на казахском языке)\n"
         "🇷🇺 **Перевод:** (точный перевод на русский)\n"
         "💡 **Мағынасы (Смысл):** (понятное объяснение сути в 1-2 предложения)\n"
         "📌 **Қолданылуы (Применение):** (коротко, в какой жизненной ситуации применяется)\n\n"
-        "Отвечай без долгих вступлений и лишних приветствий. Соблюдай умеренную длину.\n\n"
+        "Отвечай сразу по делу, без приветствий и лишних вводных слов.\n\n"
         f"Запрос: {prompt}"
     )
 
@@ -88,22 +87,20 @@ async def ask_gemini(prompt: str) -> str:
         "x-goog-api-key": GEMINI_API_KEY
     }
 
-    async with httpx.AsyncClient(timeout=30.0) as client:
-        last_error = ""
+    # Быстрый таймаут 10 сек, чтобы бот не «зависал» на минуту
+    async with httpx.AsyncClient(timeout=10.0) as client:
         for model in MODELS_TO_TRY:
-            for api_ver in ["v1beta", "v1"]:
-                url = f"https://generativelanguage.googleapis.com/{api_ver}/models/{model}:generateContent"
-                try:
-                    response = await client.post(url, json=payload, headers=headers)
-                    if response.status_code == 200:
-                        data = response.json()
-                        return data['candidates'][0]['content']['parts'][0]['text']
-                    else:
-                        last_error = f"Model {model} ({api_ver}) HTTP {response.status_code}: {response.text}"
-                except Exception as e:
-                    last_error = str(e)
-        
-        return f"❌ Ошибка запроса к ИИ: {last_error}"
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
+            try:
+                response = await client.post(url, json=payload, headers=headers)
+                if response.status_code == 200:
+                    data = response.json()
+                    return data['candidates'][0]['content']['parts'][0]['text']
+            except Exception as e:
+                logging.warning(f"Пропуск модели {model}: {e}")
+                continue
+
+    return "⚠️ ИИ задерживается с ответом. Попробуй нажать на кнопку ещё раз!"
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     welcome_text = (
@@ -148,27 +145,27 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await context.bot.send_chat_action(chat_id=chat_id, action="typing")
 
     if text == "📚 Учить пословицы":
-        prompt = "Приведи 2 мудрые казахские пословицы. Для каждой соблюдай структуру: 1) Мақал, 2) Перевод, 3) Мағынасы, 4) Қолданылуы."
+        prompt = "Приведи мудрую казахскую пословицу."
         reply = await ask_gemini(prompt)
 
     elif text == "🎯 Проверь себя":
-        prompt = "Сгенерируй тест по казахским пословицам: 1 вопрос, 3 варианта ответа (A, B, C) и в конце напиши правильный ответ с указанием мақал, перевода и смысла."
+        prompt = "Сгенерируй короткий тест по казахской пословице: 1 вопрос, 3 варианта ответа (A, B, C) и правильный ответ."
         reply = await ask_gemini(prompt)
 
     elif text == "🎲 Случайная пословица":
         proverb = random.choice(POPULAR_PROVERBS)
-        prompt = f"Возьми пословицу '{proverb}'. Выдай её строго по формату: Мақал -> Перевод -> Мағынасы -> Қолданылуы."
+        prompt = f"Возьми пословицу '{proverb}'."
         reply = await ask_gemini(prompt)
 
     elif text == "🔍 Найти по теме":
-        reply = "💡 Напиши тему (например: дружба, родина, учеба), и я подберу подходящую пословицу с переводом и смыслом!"
+        reply = "💡 Напиши тему (например: дружба, родина, учеба), и я подберу подходящую пословицу!"
 
     elif text == "🏆 Мой результат":
         fav_count = len(user_favorites.get(chat_id, []))
         reply = f"📊 Твой уровень: Мудрец-начинающий ⭐️\nСохранено в избранное: {fav_count} пословиц"
 
     else:
-        prompt = f"Разбери пословицу или подбери пословицу по теме '{text}'. Оформи строго по структуре: 1) Мақал, 2) Перевод, 3) Мағынасы (Смысл), 4) Қолданылуы (Применение)."
+        prompt = f"Разбери пословицу или подбери пословицу по теме '{text}'."
         reply = await ask_gemini(prompt)
 
     last_bot_message[chat_id] = reply
