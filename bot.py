@@ -14,7 +14,7 @@ from telegram.ext import (
     filters
 )
 
-# 1. Веб-сервер для Health Check на Render
+# 1. Веб-сервер для Health Check на Render (чтобы сервис не засыпал и проходил проверки)
 class HealthCheckHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
@@ -28,7 +28,7 @@ def run_web_server():
 
 threading.Thread(target=run_web_server, daemon=True).start()
 
-# 2. Настройка логирования
+# 2. Логирование
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     level=logging.INFO
@@ -38,13 +38,14 @@ logging.basicConfig(
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 
-# Модели 3.5 серии
+# Актуальные модели Gemini 3.5
 MODELS_TO_TRY = [
     "gemini-3.5-flash",
     "gemini-3.5-flash-lite",
     "gemini-3.0-flash"
 ]
 
+# Меню кнопок
 MENU_KEYBOARD = ReplyKeyboardMarkup(
     [
         [KeyboardButton("📚 Учить пословицы"), KeyboardButton("🎯 Проверь себя")],
