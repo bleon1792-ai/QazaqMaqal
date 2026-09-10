@@ -38,9 +38,11 @@ logging.basicConfig(
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 
+# Список актуальных моделей для перебора
 MODELS_TO_TRY = [
-    "gemini-2.5-flash",
-    "gemini-2.5-flash-lite",
+    "gemini-3.5-flash",
+    "gemini-3.5-flash-lite",
+    "gemini-2.0-flash",
     "gemini-1.5-flash"
 ]
 
@@ -87,20 +89,20 @@ async def ask_gemini(prompt: str) -> str:
         "x-goog-api-key": GEMINI_API_KEY
     }
 
-    # Быстрый таймаут 10 сек, чтобы бот не «зависал» на минуту
-    async with httpx.AsyncClient(timeout=10.0) as client:
+    async with httpx.AsyncClient(timeout=8.0) as client:
         for model in MODELS_TO_TRY:
-            url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
-            try:
-                response = await client.post(url, json=payload, headers=headers)
-                if response.status_code == 200:
-                    data = response.json()
-                    return data['candidates'][0]['content']['parts'][0]['text']
-            except Exception as e:
-                logging.warning(f"Пропуск модели {model}: {e}")
-                continue
+            for api_ver in ["v1beta", "v1"]:
+                url = f"https://generativelanguage.googleapis.com/{api_ver}/models/{model}:generateContent"
+                try:
+                    response = await client.post(url, json=payload, headers=headers)
+                    if response.status_code == 200:
+                        data = response.json()
+                        return data['candidates'][0]['content']['parts'][0]['text']
+                except Exception as e:
+                    logging.warning(f"Ошибка запроса {model} ({api_ver}): {e}")
+                    continue
 
-    return "⚠️ ИИ задерживается с ответом. Попробуй нажать на кнопку ещё раз!"
+    return "⚠️ ИИ задерживается с ответом. Нажми на кнопку ещё раз!"
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     welcome_text = (
