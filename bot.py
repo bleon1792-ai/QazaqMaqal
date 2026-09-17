@@ -16,7 +16,7 @@ from telegram.ext import (
 )
 
 # ==========================================
-# 1. СЕРВЕР ДЛЯ ПОДДЕРЖАНИЯ АКТИВНОСТИ (RENDER)
+# 1. СЕРВЕР ДЛЯ ХОСТИНГА (RENDER)
 # ==========================================
 class HealthCheckHandler(BaseHTTPRequestHandler):
     def do_GET(self):
@@ -37,7 +37,7 @@ TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 
 # ==========================================
-# 2. БАЗА ДАННЫХ ПОСЛОВИЦ (КЕШИРОВАНИЕ)
+# 2. БАЗА ДАННЫХ ПОСЛОВИЦ
 # ==========================================
 PROVERBS_DB = [
     {
@@ -76,15 +76,8 @@ PROVERBS_DB = [
         "keys": ["друг", "дружба", "дос", "друзья", "достық"]
     },
     {
-        "maqal": "Жақсы байқап сөйлер, Жаман шайқап сөйлер.",
-        "translation": "Мудрый говорит обдуманно, глупый — наобум.",
-        "meaning": "Умный человек всегда взвешивает свои слова перед тем как сказать.",
-        "usage": "Говорится о культуре речи и сдержанности.",
-        "keys": ["слово", "сөз", "мудрость", "речь", "глупость"]
-    },
-    {
         "maqal": "Ананың көңілі балада, баланың көңілі далада.",
-        "translation": "Душа матери — в ребенке, душа ребенка — в степи (на улице).",
+        "translation": "Душа матери — в ребенке, душа ребенка — в степи.",
         "meaning": "Родители всегда переживают за детей, а дети часто беспечны.",
         "usage": "Используется, когда говорят о родительской любви и заботе.",
         "keys": ["мама", "ана", "семья", "ребенок", "бала", "родители"]
@@ -117,14 +110,14 @@ def format_proverb_card(p: dict) -> str:
 # ==========================================
 async def ask_gemini_fallback(text: str) -> str:
     if not GEMINI_API_KEY:
-        return "❌ Ошибка системы: API ключ GEMINI_API_KEY не задан!"
+        return "❌ Ошибка системы: Ключ GEMINI_API_KEY не установлен!"
 
     full_prompt = (
         "Действуй как эксперт по казахскому фольклору.\n"
         "Сформулируй ответ строго по следующей структуре без вводных слов:\n\n"
         "🇰🇿 **Мақал:** (казахская пословица)\n"
         "🇷🇺 **Перевод:** (перевод на русский)\n"
-        "💡 **Мағынасы:** (смысл пословицы)\n"
+        "💡 **Мағынасы:** (смысл пословицы в 1-2 предложениях)\n"
         "📌 **Қолданылуы:** (применение в жизни)\n\n"
         f"Запрос пользователя: {text}"
     )
@@ -132,7 +125,7 @@ async def ask_gemini_fallback(text: str) -> str:
     payload = {"contents": [{"parts": [{"text": full_prompt}]}]}
     headers = {"Content-Type": "application/json", "x-goog-api-key": GEMINI_API_KEY}
 
-    # Использование модели Gemini 3.6 Flash
+    # Вставка модели Gemini 3.6 Flash
     model = "gemini-3.6-flash"
     url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
 
@@ -143,17 +136,17 @@ async def ask_gemini_fallback(text: str) -> str:
                 data = response.json()
                 return data['candidates'][0]['content']['parts'][0]['text']
             else:
-                logging.error(f"Gemini 3.6 API Error: {response.status_code} - {response.text}")
+                logging.error(f"API Error {response.status_code}: {response.text}")
                 return f"⚠️ Ошибка ИИ (Код {response.status_code}). Попробуй выбрать из меню!"
         except Exception as e:
-            logging.error(f"Network Error: {e}")
-            return "⚠️ Ошибка сети при обращении к нейросети."
+            logging.error(f"Network Exception: {e}")
+            return "⚠️ Ошибка подключения к серверу."
 
 # ==========================================
-# 4. ОБРАБОТКА КОМАНД И СООБЩЕНИЙ
+# 4. ОБРАБОТКА КОМАНД
 # ==========================================
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    welcome_text = "Сәлем! 👋 Добро пожаловать в QazaqMaqal 🇰🇿!\n\nИнтерактивный помощник по изучению казахских пословиц. Выберите команду:"
+    welcome_text = "Сәлем! 👋 Добро пожаловать в QazaqMaqal 🇰🇿!\n\nИнтерактивный помощник по изучению казахских пословиц. Выберите команду из меню:"
     await update.message.reply_text(welcome_text, reply_markup=MENU_KEYBOARD)
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -182,7 +175,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reply = format_proverb_card(item)
 
     elif text == "🔍 найти по теме":
-        reply = "💡 Напиши ключевое слово (например: дос, семья, родина, білім), и я найду пословицу!"
+        reply = "💡 Напиши ключевое слово (например: дос, семья, родина, білім), и я найду подходящую пословицу!"
 
     elif text == "❤️ избранное":
         favs = user_favorites.get(chat_id, [])
@@ -205,7 +198,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 user_favorites[chat_id].append(last_msg)
                 reply = "✅ Сохранено в Избранное!"
             else:
-                reply = "📌 Ужe есть в избранном!"
+                reply = "📌 Уже есть в избранном!"
 
     elif text == "🗑 очистить избранное":
         user_favorites[chat_id] = []
@@ -218,12 +211,13 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         found_local = None
         
-        # Точный локальный поиск
+        # Точный поиск по ключам
         for p in PROVERBS_DB:
             if text in p.get("keys", []):
                 found_local = p
                 break
                 
+        # Поиск целого слова через RegExp (защита от совпадения "дос" в "достаток")
         if not found_local:
             for p in PROVERBS_DB:
                 full_text = f"{p['maqal']} {p['translation']} {p['meaning']}".lower()
@@ -241,7 +235,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(reply, reply_markup=MENU_KEYBOARD)
 
 # ==========================================
-# 5. ТОЧКА ВХОДА
+# 5. ЗАПУСК
 # ==========================================
 if __name__ == "__main__":
     if not TELEGRAM_BOT_TOKEN:
@@ -252,5 +246,5 @@ if __name__ == "__main__":
     app.add_handler(CommandHandler("start", start))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
-    print("🚀 Бот QazaqMaqal на Gemini 3.6 успешно запущен!")
+    print("🚀 Бот QazaqMaqal на Gemini 3.6 Flash запущен!")
     app.run_polling()
