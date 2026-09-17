@@ -4,6 +4,7 @@ import logging
 import random
 import threading
 import re
+import asyncio
 from http.server import HTTPServer, BaseHTTPRequestHandler
 import httpx
 from telegram import Update, ReplyKeyboardMarkup, KeyboardButton
@@ -106,7 +107,7 @@ def format_proverb_card(p: dict) -> str:
     )
 
 # ==========================================
-# 3. ИНТЕГРАЦИЯ С GEMINI 3.6 FLASH
+# 3. ИНТЕГРАЦИЯ С GEMINI 3.6 FLASH (С АВТО-ПОВТОРОМ)
 # ==========================================
 async def ask_gemini_fallback(text: str) -> str:
     if not GEMINI_API_KEY:
@@ -125,22 +126,32 @@ async def ask_gemini_fallback(text: str) -> str:
     payload = {"contents": [{"parts": [{"text": full_prompt}]}]}
     headers = {"Content-Type": "application/json", "x-goog-api-key": GEMINI_API_KEY}
 
-    # Вставка модели Gemini 3.6 Flash
     model = "gemini-3.6-flash"
     url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
 
-    async with httpx.AsyncClient(timeout=10.0) as client:
+    # Автоматические повторные попытки при перегрузке (503 High Demand)
+    max_retries = 3
+    for attempt in range(max_retries):
         try:
-            response = await client.post(url, json=payload, headers=headers)
-            if response.status_code == 200:
-                data = response.json()
-                return data['candidates'][0]['content']['parts'][0]['text']
-            else:
-                logging.error(f"API Error {response.status_code}: {response.text}")
-                return f"⚠️ Ошибка ИИ (Код {response.status_code}). Попробуй выбрать из меню!"
+            async with httpx.AsyncClient(timeout=15.0) as client:
+                response = await client.post(url, json=payload, headers=headers)
+                
+                if response.status_code == 200:
+                    data = response.json()
+                    return data['candidates'][0]['content']['parts'][0]['text']
+                
+                elif response.status_code == 503:
+                    # Сервер перегружен — ждем 1.5 секунды и делаем повторный запрос
+                    logging.warning(f"503 High Demand (Попытка {attempt + 1}/{max_retries}). Ждем повтора...")
+                    await asyncio.sleep(1.5 * (attempt + 1))
+                else:
+                    logging.error(f"API Error {response.status_code}: {response.text}")
+                    break
         except Exception as e:
-            logging.error(f"Network Exception: {e}")
-            return "⚠️ Ошибка подключения к серверу."
+            logging.error(f"Network Exception (Попытка {attempt + 1}): {e}")
+            await asyncio.sleep(1.0)
+
+    return "⚠️ Сервера Gemini 3.6 сейчас перегружены (High Demand). Попробуй еще раз через пару секунд или выбери вариант из меню!"
 
 # ==========================================
 # 4. ОБРАБОТКА КОМАНД
@@ -211,13 +222,11 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         found_local = None
         
-        # Точный поиск по ключам
         for p in PROVERBS_DB:
             if text in p.get("keys", []):
                 found_local = p
                 break
                 
-        # Поиск целого слова через RegExp (защита от совпадения "дос" в "достаток")
         if not found_local:
             for p in PROVERBS_DB:
                 full_text = f"{p['maqal']} {p['translation']} {p['meaning']}".lower()
